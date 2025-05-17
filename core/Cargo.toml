@@ -7,9 +7,14 @@ authors = [
 ]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+anyhow = "1.0.98"
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
+web-sys = { version = "0.3.77", features = ["HtmlCanvasElement"] }
+wgpu = { version = "25.0.0", features = ["webgl", "webgpu"] }
 console_log = { version = "1.0.0", features = ["color"] }
 log = "0.4.27"
-wasm-bindgen = "0.2.100"
+bytemuck = "1.23.0"

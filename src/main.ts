@@ -12,9 +12,7 @@ async function setup(): Promise<HTMLCanvasElement> {
 }
 
 async function render(app: HTMLCanvasElement) {
-    // TODO: render
-    console.log("rendering... on", app);
-    console.log(wasmCore.add(10, 20));
+    await wasmCore.run(app);
 }
 
 window.onload = async () => {
