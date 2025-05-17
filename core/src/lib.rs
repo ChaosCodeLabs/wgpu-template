@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use wasm_bindgen::prelude::*;
 use log::{error, info};
 use web_sys::{console::info, HtmlCanvasElement};
-use wgpu::{util::{BufferInitDescriptor, DeviceExt}, wgt::{CommandEncoderDescriptor, DeviceDescriptor}, BufferAddress, BufferUsages, Color, Features, FragmentState, Limits, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipelineDescriptor, RequestAdapterOptionsBase, ShaderModuleDescriptor, SurfaceTarget, VertexBufferLayout, VertexState};
+use wgpu::{util::{BufferInitDescriptor, DeviceExt}, wgt::{CommandEncoderDescriptor, DeviceDescriptor}, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferAddress, BufferUsages, Color, Features, FragmentState, Limits, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipelineDescriptor, RequestAdapterOptionsBase, ShaderModuleDescriptor, ShaderStages, SurfaceTarget, VertexBufferLayout, VertexState};
 
 #[wasm_bindgen]
 pub async fn run(canvas: HtmlCanvasElement) {
@@ -10,6 +10,13 @@ pub async fn run(canvas: HtmlCanvasElement) {
         Err(err) => error!("Error occurred: {:?}", err),
         Ok(()) => return,
     }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct ScreenSize {
+    width: f32,
+    height: f32,
 }
 
 async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
@@ -57,10 +64,46 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
         [0.0, 0.5],
         [0.5, -0.5],
     ];
+    let screen_size = ScreenSize {
+        width: width as f32,
+        height: height as f32,
+    };
     let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertex_data),
         usage: BufferUsages::VERTEX,
+    });
+    let screen_size_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("Screen Size uniform buffer"),
+        contents: bytemuck::bytes_of(&screen_size),
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST
+    });
+
+    let screen_size_bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: Some("Screen Size bind group layout"),
+        entries: &[
+            BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None
+                },
+                count: None,
+            }
+        ]
+    });
+
+    let screen_size_bind_group = device.create_bind_group(&BindGroupDescriptor {
+        label: Some("Screen Size bind group"),
+        layout: &screen_size_bind_group_layout,
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: screen_size_buffer.as_entire_binding()
+            }
+        ]
     });
 
     // shaders
@@ -75,7 +118,7 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
     info!("Creating pipeline");
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Pipeline Layout"),
-        bind_group_layouts: &[],
+        bind_group_layouts: &[&screen_size_bind_group_layout],
         push_constant_ranges: &[],
     });
 
@@ -140,6 +183,7 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
             occlusion_query_set: None,
         });
         render_pass.set_pipeline(&pipeline);
+        render_pass.set_bind_group(0, &screen_size_bind_group, &[]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         render_pass.draw(0..vertex_data.len() as u32, 0..1);
     }
