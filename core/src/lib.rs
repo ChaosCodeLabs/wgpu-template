@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use wasm_bindgen::prelude::*;
 use log::{error, info};
 use web_sys::{console::info, HtmlCanvasElement};
-use wgpu::{util::{BufferInitDescriptor, DeviceExt}, wgt::{CommandEncoderDescriptor, DeviceDescriptor}, BackendOptions, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferAddress, BufferUsages, Color, Features, FragmentState, Limits, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipelineDescriptor, RequestAdapterOptionsBase, ShaderModuleDescriptor, ShaderStages, SurfaceTarget, VertexBufferLayout, VertexState};
+use wgpu::{naga::proc::index, util::{BufferInitDescriptor, DeviceExt}, wgt::{CommandEncoderDescriptor, DeviceDescriptor}, BackendOptions, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferAddress, BufferUsages, Color, Features, FragmentState, Limits, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipelineDescriptor, RequestAdapterOptionsBase, ShaderModuleDescriptor, ShaderStages, SurfaceTarget, VertexBufferLayout, VertexState};
 
 #[wasm_bindgen]
 pub async fn run(canvas: HtmlCanvasElement) {
@@ -69,10 +69,15 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
     
     // buffers
     info!("Creating vertex buffer");
-    let vertex_data: [Vertex; 3] = [
-        Vertex { pos: [-0.5, -0.5, 0.0], color: [1.0, 0.0, 0.0]},
-        Vertex { pos: [0.0, 0.5, 0.0], color: [0.0, 1.0, 0.0]},
-        Vertex { pos: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0]},
+    let vertex_data: [Vertex; 4] = [
+        Vertex { pos: [-1.0, -1.0, 0.0], color: [1.0, 0.0, 0.0]},
+        Vertex { pos: [-1.0, 1.0, 0.0], color: [0.0, 1.0, 0.0]},
+        Vertex { pos: [1.0, 1.0, 0.0], color: [0.0, 0.0, 1.0]},
+        Vertex { pos: [1.0, -1.0, 0.0], color: [1.0, 1.0, 1.0]},
+    ];
+    let index_data: [u16; 6] = [
+        0, 1, 2,
+        0, 2, 3,
     ];
     let screen_size = ScreenSize {
         width: width as f32,
@@ -82,6 +87,11 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
         label: Some("Vertex Buffer"),
         contents: bytemuck::bytes_of(&vertex_data),
         usage: BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::bytes_of(&index_data),
+        usage: BufferUsages::INDEX,
     });
     let screen_size_buffer = device.create_buffer_init(&BufferInitDescriptor {
         label: Some("Screen Size uniform buffer"),
@@ -195,7 +205,9 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
         render_pass.set_pipeline(&pipeline);
         render_pass.set_bind_group(0, &screen_size_bind_group, &[]);
         render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        render_pass.draw(0..vertex_data.len() as u32, 0..1);
+        render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        // render_pass.draw(0..vertex_data.len() as u32, 0..1);
+        render_pass.draw_indexed(0..index_data.len() as u32, 0, 0..1);
     }
     queue.submit(Some(encoder.finish()));
     frame.present();
