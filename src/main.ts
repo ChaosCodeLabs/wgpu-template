@@ -1,7 +1,8 @@
 import './style.css';
+import wasmInit, * as wasmCore from 'wasm-core';
 
 async function setup(): Promise<HTMLCanvasElement> {
-    // TODO: wasm setup
+    await wasmInit();
     const app = <HTMLCanvasElement>(
         document.querySelector<HTMLCanvasElement>("#app")
     );
@@ -13,6 +14,7 @@ async function setup(): Promise<HTMLCanvasElement> {
 async function render(app: HTMLCanvasElement) {
     // TODO: render
     console.log("rendering... on", app);
+    console.log(wasmCore.add(10, 20));
 }
 
 window.onload = async () => {
