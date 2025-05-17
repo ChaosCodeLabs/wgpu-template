@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use wasm_bindgen::prelude::*;
 use log::{error, info};
 use web_sys::{console::info, HtmlCanvasElement};
-use wgpu::{util::{BufferInitDescriptor, DeviceExt}, wgt::{CommandEncoderDescriptor, DeviceDescriptor}, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferAddress, BufferUsages, Color, Features, FragmentState, Limits, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipelineDescriptor, RequestAdapterOptionsBase, ShaderModuleDescriptor, ShaderStages, SurfaceTarget, VertexBufferLayout, VertexState};
+use wgpu::{util::{BufferInitDescriptor, DeviceExt}, wgt::{CommandEncoderDescriptor, DeviceDescriptor}, BackendOptions, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferAddress, BufferUsages, Color, Features, FragmentState, Limits, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipelineDescriptor, RequestAdapterOptionsBase, ShaderModuleDescriptor, ShaderStages, SurfaceTarget, VertexBufferLayout, VertexState};
 
 #[wasm_bindgen]
 pub async fn run(canvas: HtmlCanvasElement) {
@@ -19,6 +19,13 @@ struct ScreenSize {
     height: f32,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    pos: [f32; 3],
+    color: [f32; 3],
+}
+
 async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
     console_log::init().map_err(|err| anyhow!("Could not init logger: {:?}", err))?;
     info!("Running webgpu!!!");
@@ -29,7 +36,10 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
 
     // gpu context
     info!("Making context variables");
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        backends: Backends::BROWSER_WEBGPU,
+        ..Default::default()
+    });
     let surface_target = SurfaceTarget::Canvas(canvas);
     let surface = instance
         .create_surface(surface_target)
@@ -59,10 +69,10 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
     
     // buffers
     info!("Creating vertex buffer");
-    let vertex_data: [[f32; 2]; 3] = [
-        [-0.5, -0.5],
-        [0.0, 0.5],
-        [0.5, -0.5],
+    let vertex_data: [Vertex; 3] = [
+        Vertex { pos: [-0.5, -0.5, 0.0], color: [1.0, 0.0, 0.0]},
+        Vertex { pos: [0.0, 0.5, 0.0], color: [0.0, 1.0, 0.0]},
+        Vertex { pos: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0]},
     ];
     let screen_size = ScreenSize {
         width: width as f32,
@@ -70,7 +80,7 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
     };
     let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
         label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(&vertex_data),
+        contents: bytemuck::bytes_of(&vertex_data),
         usage: BufferUsages::VERTEX,
     });
     let screen_size_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -134,9 +144,9 @@ async fn run_with_result(canvas: HtmlCanvasElement) -> Result<()> {
             compilation_options: PipelineCompilationOptions::default(),
             buffers: &[
                 VertexBufferLayout {
-                    array_stride: std::mem::size_of::<[f32; 2]>() as BufferAddress,
+                    array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x2] // matches @position(0)
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3] // matches @position(0), and @position(1)
                 }
             ],
         },

@@ -1,8 +1,22 @@
+struct VertexInput {
+    @location(0) pos: vec3<f32>,
+    @location(1) color: vec3<f32>
+}
+
+struct VertexOutput {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) color: vec3<f32>
+}
+
 // ===== Vertex shader =====
 
 @vertex
-fn vs_main(@location(0) position: vec2<f32>) -> @builtin(position) vec4<f32> {
-    return vec4<f32>(position, 0.0, 1.0);
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var output = VertexOutput(
+        vec4<f32>(in.pos, 1.0),
+        in.color
+    );
+    return output;
 }
 
 // ===== Fragment shader =====
@@ -16,11 +30,9 @@ struct ScreenSize {
 var<uniform> screen_size: ScreenSize;
 
 @fragment
-fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(
-        frag_coord.x / screen_size.width,
-        frag_coord.y / screen_size.height,
-        0.0,
+        in.color,
         1.0
     );
 }
