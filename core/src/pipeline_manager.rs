@@ -2,7 +2,7 @@ use log::info;
 use wgpu::{
     BufferAddress, Device, FragmentState, MultisampleState, PipelineCompilationOptions,
     PipelineLayoutDescriptor, PrimitiveState, RenderPipeline, RenderPipelineDescriptor,
-    ShaderModule, ShaderModuleDescriptor, TextureFormat, VertexBufferLayout, VertexState,
+    ShaderModuleDescriptor, TextureFormat, VertexBufferLayout, VertexState,
 };
 
 use crate::buffer_manager::{BufferManager, Vertex};

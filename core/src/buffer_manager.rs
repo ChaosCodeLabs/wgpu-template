@@ -1,4 +1,6 @@
 use log::info;
+use serde::Deserialize;
+use web_sys::js_sys::Math::abs;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, Buffer, BufferUsages, Device, ShaderStages,
@@ -13,16 +15,38 @@ pub struct Vertex {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, Deserialize, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MousePos {
+    x: f32,
+    y: f32,
+}
+impl MousePos {
+    fn zero() -> Self {
+        MousePos { x: 0.0, y: 0.0 }
+    }
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ProgramUniform {
-    pub screen_width: f32,
-    pub screen_height: f32,
+    screen_width: f32,
+    screen_height: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct PerFrameUniform {
+    time: f32,
+    delta_time: f32,
+    mouse_pos: MousePos,
 }
 
 // uniforms
 pub struct UniformManager {
     pub program_uniform_data: ProgramUniform,
     pub program_uniform_buffer: Buffer,
+    pub per_frame_uniform_data: PerFrameUniform,
+    pub per_frame_uniform_buffer: Buffer,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
 }
@@ -34,15 +58,25 @@ impl UniformManager {
             screen_height: height as f32,
         };
         let program_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Screen Size uniform buffer"),
+            label: Some("Program uniform buffer"),
             contents: bytemuck::bytes_of(&program_uniform_data),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
+        let per_frame_uniform_data = PerFrameUniform {
+            time: 0.0,
+            delta_time: 0.0,
+            mouse_pos: MousePos::zero(),
+        };
+        let per_frame_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Per Frame uniform buffer"),
+            contents: bytemuck::bytes_of(&per_frame_uniform_data),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
 
-        let program_uniform_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("Program uniforms bind group layout"),
-                entries: &[BindGroupLayoutEntry {
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Program uniforms bind group layout"),
+            entries: &[
+                BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Buffer {
@@ -51,23 +85,72 @@ impl UniformManager {
                         min_binding_size: None,
                     },
                     count: None,
-                }],
-            });
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
 
-        let program_uniform_bind_group = device.create_bind_group(&BindGroupDescriptor {
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("Program uniforms bind group"),
-            layout: &program_uniform_bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: program_uniform_buffer.as_entire_binding(),
-            }],
+            layout: &bind_group_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: program_uniform_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: per_frame_uniform_buffer.as_entire_binding(),
+                },
+            ],
         });
         Self {
             program_uniform_data,
             program_uniform_buffer,
-            bind_group_layout: program_uniform_bind_group_layout,
-            bind_group: program_uniform_bind_group,
+            per_frame_uniform_data,
+            per_frame_uniform_buffer,
+            bind_group_layout,
+            bind_group,
         }
+    }
+
+    pub fn update(
+        &mut self,
+        time: Option<f32>,
+        delta_time: Option<f32>,
+        mouse_pos: Option<MousePos>,
+    ) {
+        if time.is_none() && delta_time.is_none() && mouse_pos.is_none() {
+            return;
+        }
+        let per_frame_uniform_data = PerFrameUniform {
+            time: time.unwrap_or(self.per_frame_uniform_data.time),
+            delta_time: delta_time.unwrap_or(self.per_frame_uniform_data.delta_time),
+            mouse_pos: if let Some(mouse_pos) = mouse_pos {
+                MousePos {
+                    x: f32::min(
+                        f32::max(mouse_pos.x, 0.0),
+                        self.program_uniform_data.screen_width,
+                    ),
+                    y: f32::min(
+                        f32::max(mouse_pos.y, 0.0),
+                        self.program_uniform_data.screen_height,
+                    ),
+                }
+            } else {
+                self.per_frame_uniform_data.mouse_pos
+            },
+        };
+        self.per_frame_uniform_data = per_frame_uniform_data;
     }
 }
 

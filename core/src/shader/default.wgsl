@@ -21,21 +21,35 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 // ===== Fragment shader =====
 
-struct ScreenSize {
-    width: f32,
-    height: f32
+struct ProgramUniform {
+    screen_width: f32,
+    screen_height: f32
+}
+struct PerFrameUniform {
+    time: f32,
+    delta: f32,
+    mouse: vec2<f32>,
 }
 
 @group(0) @binding(0)
-var<uniform> screen_size: ScreenSize;
+var<uniform> program_uniform: ProgramUniform;
+
+@group(0) @binding(1)
+var<uniform> per_frame_uniform: PerFrameUniform;
+
+const circle_radius: f32 = 100.0;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(
+    let bg = vec4<f32>(
         // in.color,
-        in.pos.x / screen_size.width,
-        in.pos.y / screen_size.height,
+        in.pos.x / program_uniform.screen_width,
+        in.pos.y / program_uniform.screen_height,
         in.color.b,
         1.0
     );
+    let dist = distance(in.pos.xy, per_frame_uniform.mouse);
+    let is_in_circle = step(dist, circle_radius);
+    let circle_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    return mix(bg, circle_color, is_in_circle);
 }

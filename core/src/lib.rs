@@ -3,7 +3,7 @@ mod gpu_context;
 mod pipeline_manager;
 mod renderer;
 
-use buffer_manager::BufferManager;
+use buffer_manager::{BufferManager, MousePos};
 use gpu_context::GpuContext;
 use log::info;
 use pipeline_manager::PipelineManager;
@@ -43,6 +43,29 @@ impl App {
             pipeline: pipeline_manager,
             renderer,
         })
+    }
+
+    #[wasm_bindgen]
+    pub fn update(
+        &mut self,
+        time: Option<f32>,
+        delta_time: Option<f32>,
+        mouse: JsValue,
+    ) -> Result<(), JsError> {
+        let mouse_pos = if !mouse.is_null() && !mouse.is_undefined() {
+            serde_wasm_bindgen::from_value::<MousePos>(mouse).ok()
+        } else {
+            None
+        };
+        self.buffers
+            .uniform_manager
+            .update(time, delta_time, mouse_pos);
+        self.gpu.queue.write_buffer(
+            &self.buffers.uniform_manager.per_frame_uniform_buffer,
+            0,
+            bytemuck::bytes_of(&self.buffers.uniform_manager.per_frame_uniform_data),
+        );
+        Ok(())
     }
 
     #[wasm_bindgen]
