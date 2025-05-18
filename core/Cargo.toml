@@ -18,3 +18,7 @@ wgpu = { version = "25.0.0", features = ["webgl", "webgpu"] }
 console_log = { version = "1.0.0", features = ["color"] }
 log = "0.4.27"
 bytemuck = "1.23.0"
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"

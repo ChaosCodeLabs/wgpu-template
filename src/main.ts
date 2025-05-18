@@ -1,21 +1,22 @@
 import './style.css';
 import wasmInit, * as wasmCore from 'wasm-core';
 
-async function setup(): Promise<HTMLCanvasElement> {
+async function setup(): Promise<wasmCore.App> {
     await wasmInit();
-    const app = <HTMLCanvasElement>(
+    const canvas = <HTMLCanvasElement>(
         document.querySelector<HTMLCanvasElement>("#app")
     );
-    app.width = app.clientWidth;
-    app.height = app.clientHeight;
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    const app = wasmCore.App.setup(canvas);
     return app;
 }
 
-async function render(app: HTMLCanvasElement) {
-    await wasmCore.run(app);
+function render(app: wasmCore.App) {
+    app.render()
 }
 
 window.onload = async () => {
     const app = await setup();
-    await render(app);
+    render(app);
 }

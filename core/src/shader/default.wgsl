@@ -35,7 +35,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // in.color,
         in.pos.x / screen_size.width,
         in.pos.y / screen_size.height,
-        0.0,
+        in.color.b,
         1.0
     );
 }

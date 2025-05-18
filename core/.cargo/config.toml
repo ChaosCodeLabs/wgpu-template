@@ -1,4 +1,11 @@
 [build]
 rustflags = [
-    "--cfg=webgpu"
+    "--cfg", "webgpu",
+    #"--cfg", "target_arch=\"wasm32\""
 ]
+
+[alias]
+wasm-check = "check --release --lib --target wasm32-unknown-unknown"
+wasm = "build --release --lib --target wasm32-unknown-unknown"
+wasm-debug = "build --lib --target wasm32-unknown-unknown"
+
