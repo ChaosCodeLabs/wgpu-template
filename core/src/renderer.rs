@@ -4,6 +4,7 @@ use wgpu::{Color, CommandEncoderDescriptor, Operations};
 
 use crate::{
     buffer_manager::BufferManager, gpu_context::GpuContext, pipeline_manager::PipelineManager,
+    texture_manager::TextureManager,
 };
 
 pub struct Renderer;
@@ -18,6 +19,7 @@ impl Renderer {
         &self,
         gpu: &GpuContext,
         buffers: &BufferManager,
+        textures: &TextureManager,
         pipeline: &PipelineManager,
     ) -> Result<(), JsError> {
         info!("Rendering webgpu");
@@ -51,6 +53,7 @@ impl Renderer {
             });
             render_pass.set_pipeline(&pipeline.pipeline);
             render_pass.set_bind_group(0, &buffers.uniform_manager.bind_group, &[]);
+            render_pass.set_bind_group(1, &textures.bind_group, &[]);
             render_pass.set_vertex_buffer(0, buffers.vertex_buffer.slice(..));
             render_pass.set_index_buffer(buffers.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..buffers.index_length as u32, 0, 0..1);

@@ -12,6 +12,7 @@ use wgpu::{
 pub struct Vertex {
     pos: [f32; 3],
     color: [f32; 3],
+    tex_pos: [f32; 2],
 }
 
 #[repr(C)]
@@ -169,18 +170,22 @@ impl BufferManager {
             Vertex {
                 pos: [-1.0, -1.0, 0.0],
                 color: [1.0, 0.0, 0.0],
+                tex_pos: [0.0, 1.0],
             },
             Vertex {
                 pos: [-1.0, 1.0, 0.0],
                 color: [0.0, 1.0, 0.0],
+                tex_pos: [0.0, 0.0],
             },
             Vertex {
                 pos: [1.0, 1.0, 0.0],
                 color: [0.0, 0.0, 1.0],
+                tex_pos: [1.0, 0.0],
             },
             Vertex {
                 pos: [1.0, -1.0, 0.0],
                 color: [1.0, 1.0, 1.0],
+                tex_pos: [1.0, 1.0],
             },
         ];
         let index_data: [[u16; 3]; 2] = [[0, 1, 2], [0, 2, 3]];

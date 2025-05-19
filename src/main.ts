@@ -4,6 +4,12 @@ import wasmInit, * as wasmCore from 'wasm-core';
 let mouseX = 0;
 let mouseY = 0;
 
+async function loadTexture(url: string): Promise<ArrayBuffer> {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+    return await response.arrayBuffer();
+}
+
 async function setup(): Promise<wasmCore.App> {
     const canvas = <HTMLCanvasElement>(
         document.querySelector<HTMLCanvasElement>("#app")
@@ -11,7 +17,15 @@ async function setup(): Promise<wasmCore.App> {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
 
-    const app = wasmCore.App.setup(canvas);
+    // textures
+    const textures = await Promise.all([
+        loadTexture('./textures/happy-tree.png')
+    ]);
+
+    const app = wasmCore.App.setup(
+        canvas,
+        textures.map(tex => new Uint8Array(tex))
+    );
 
     canvas.onmousemove = (event) => {
         mouseX = event.clientX - canvas.offsetLeft;
