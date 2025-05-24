@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use image::GenericImageView;
 use log::info;
 use wasm_bindgen::{JsCast, JsError, JsValue};
@@ -8,30 +6,45 @@ use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Device,
     Extent3d, FilterMode, Queue, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages,
-    TexelCopyBufferLayout, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureSampleType, TextureUsages, TextureView, TextureViewDimension, hal::BindGroupLayoutFlags,
+    Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
 
 pub struct TextureHolder {
     pub texture: Texture,
     pub texture_view: TextureView,
 }
+
 pub struct TextureManager {
     pub textures: Vec<TextureHolder>,
-    pub samplers: Vec<Sampler>,
+    pub sampler: Sampler,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
 }
 
 impl TextureManager {
-    pub fn new(device: &Device, queue: &Queue, textures_data: JsValue) -> Result<Self, JsError> {
-        let texture_buffers = Self::load_texture_buffers(textures_data).map_err(|err| {
-            JsError::new(&format!("Error Occured while loading textures: {:?}", err))
-        })?;
-        let textures = texture_buffers
-            .iter()
-            .map(|tex_buffer: &Vec<u8>| Self::create_texture(device, queue, tex_buffer))
-            .collect::<Result<Vec<_>, JsError>>()?;
+    pub fn new(device: &Device, queue: &Queue, textures_data: Array) -> Result<Self, JsError> {
+        let mut textures = Vec::new();
+
+        // Include predefined texture
+        // let predefined = include_bytes!("./textures/download20250505175626.png");
+        // textures.push(Self::create_texture(device, queue, predefined)?);
+
+        // Load JS-supplied textures
+        for js_value in textures_data.iter() {
+            if js_value.is_null() || js_value.is_undefined() {
+                continue;
+            }
+
+            let u8_array = Uint8Array::new(&js_value);
+            let mut buffer = vec![0u8; u8_array.length() as usize];
+            u8_array.copy_to(&mut buffer[..]);
+
+            let texture = Self::create_texture(device, queue, &buffer)?;
+            textures.push(texture);
+        }
+
+        // Create sampler
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("Texture Sampler"),
             address_mode_u: AddressMode::ClampToEdge,
@@ -42,72 +55,87 @@ impl TextureManager {
             mipmap_filter: FilterMode::Nearest,
             ..Default::default()
         });
+
+        // Create bind group layout
+        let mut layout_entries: Vec<BindGroupLayoutEntry> = vec![];
         let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("Texture Bind Group Layout"),
-            entries: &[
-                // sampler
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                },
-                // texture(s)
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: TextureViewDimension::D2,
-                        sample_type: TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-            ],
+            entries: if textures.is_empty() {
+                &layout_entries
+            } else {
+                layout_entries.push(
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    }
+                );
+                layout_entries.extend(
+                    (0..textures.len()).map(|index| {
+                        BindGroupLayoutEntry {
+                            binding: 1 + index as u32,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Texture {
+                                multisampled: false,
+                                view_dimension: TextureViewDimension::D2,
+                                sample_type: TextureSampleType::Float { filterable: true },
+                            },
+                            count: None,
+                        }
+                    })
+                );
+                &layout_entries
+            }
         });
+
+        // Create bind group using first texture as representative
+        let mut entries: Vec<BindGroupEntry> = vec![];
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("Texture Bind Group"),
             layout: &bind_group_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&textures[0].texture_view),
-                },
-            ],
+            entries: if textures.is_empty() {
+                &entries
+            } else {
+                entries.push(
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::Sampler(&sampler),
+                    }
+                );
+                entries.extend(
+                    textures.iter().enumerate().map(|(i, texture)| BindGroupEntry {
+                        binding: 1 + i as u32, // binding index increases for each texture
+                        resource: BindingResource::TextureView(&texture.texture_view),
+                    })
+                );
+                &entries
+            }
         });
 
         Ok(Self {
             textures,
-            samplers: vec![sampler],
+            sampler,
             bind_group_layout,
             bind_group,
         })
     }
 
-    pub fn create_texture(
-        device: &Device,
-        queue: &Queue,
-        tex_buffer: &Vec<u8>,
-    ) -> Result<TextureHolder, JsError> {
-        let img = image::load_from_memory(&tex_buffer)
-            .map_err(|err| JsError::new(&format!("Problem occured reading texture: {:?}", err)))?;
+    fn create_texture(device: &Device, queue: &Queue, data: &[u8]) -> Result<TextureHolder, JsError> {
+        let img = image::load_from_memory(data)
+            .map_err(|e| JsError::new(&format!("Failed to load image: {e}")))?;
+
         let rgba = img.to_rgba8();
-        let dimensions = img.dimensions();
+        let (width, height) = img.dimensions();
         let size = Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            // all textures stored as 3d, we just present our 2d
-            // texture by setting depth 1
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
         let texture = device.create_texture(&TextureDescriptor {
             label: Some("Texture"),
-            size: size.clone(),
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
@@ -119,46 +147,19 @@ impl TextureManager {
         queue.write_texture(
             texture.as_image_copy(),
             &rgba,
-            TexelCopyBufferLayout {
+            wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
             },
             size,
         );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = texture.create_view(&TextureViewDescriptor::default());
 
         Ok(TextureHolder {
             texture,
             texture_view: view,
         })
-    }
-
-    fn load_texture_buffers(data: JsValue) -> Result<Vec<Vec<u8>>, JsError> {
-        // Convert the JsValue to a js_sys::Array
-        let array = Array::from(&data);
-
-        let mut textures: Vec<Vec<u8>> = Vec::new();
-
-        for i in 0..array.length() {
-            let element = array.get(i);
-
-            // Ensure the element is a Uint8Array
-            if let Ok(typed_array) = element.dyn_into::<Uint8Array>() {
-                // Convert Uint8Array to a Vec<u8>
-                let mut texture_data = vec![0; typed_array.length() as usize];
-                typed_array.copy_to(&mut texture_data[..]);
-                textures.push(texture_data);
-
-                info!("Texture {} length: {}", i, typed_array.length() as usize);
-            } else {
-                return Err(JsError::new(&format!(
-                    "Element at index {} is not a Uint8Array",
-                    i
-                )));
-            }
-        }
-        return Ok(textures);
     }
 }

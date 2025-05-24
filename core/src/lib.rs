@@ -11,7 +11,7 @@ use pipeline_manager::PipelineManager;
 use renderer::Renderer;
 use texture_manager::TextureManager;
 use wasm_bindgen::prelude::*;
-use web_sys::HtmlCanvasElement;
+use web_sys::{HtmlCanvasElement, js_sys::Array};
 use wgpu::wgc::device::queue;
 
 #[wasm_bindgen]
@@ -37,7 +37,7 @@ impl App {
 
         let gpu = GpuContext::new(canvas, width, height).await?;
         let buffer_manager = BufferManager::new(&gpu.device, width, height);
-        let texture_manager = TextureManager::new(&gpu.device, &gpu.queue, textures_data)?;
+        let texture_manager = TextureManager::new(&gpu.device, &gpu.queue, Array::from(&textures_data))?;
         let swapchain_capabilities = gpu.surface.get_capabilities(&gpu.adapter);
         let swapchain_format = swapchain_capabilities.formats[0]; // should be Bgra8Unorm generally
         let pipeline_manager = PipelineManager::new(
